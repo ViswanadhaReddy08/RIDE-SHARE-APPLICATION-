@@ -1,0 +1,235 @@
+import tkinter as tk
+from tkinter import messagebox
+import sqlite3
+import random
+
+# Database initialization
+def init_db():
+    conn = sqlite3.connect('ride_share_app.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            email TEXT,
+            phone_number TEXT,
+            type TEXT,
+            license_number TEXT,
+            vehicle_type TEXT
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS rides (
+            id INTEGER PRIMARY KEY,
+            rider_id INTEGER,
+            driver_id INTEGER,
+            pickup_location TEXT,
+            dropoff_location TEXT,
+            ride_status TEXT,
+            price REAL,
+            FOREIGN KEY (rider_id) REFERENCES users(id),
+            FOREIGN KEY (driver_id) REFERENCES users(id)
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS rentals (
+            id INTEGER PRIMARY KEY,
+            vehicle_type TEXT,
+            daily_rate REAL
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+# Initialize database
+init_db()
+
+# Helper functions
+def register_user(name, email, phone_number, user_type, license_number=None, vehicle_type=None):
+    conn = sqlite3.connect('ride_share_app.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO users (name, email, phone_number, type, license_number, vehicle_type)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (name, email, phone_number, user_type, license_number, vehicle_type))
+    conn.commit()
+    conn.close()
+
+def fetch_available_drivers():
+    conn = sqlite3.connect('ride_share_app.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT id FROM users WHERE type = "driver" AND license_number IS NOT NULL
+    ''')
+    drivers = cursor.fetchall()
+    conn.close()
+    return [driver[0] for driver in drivers]
+
+def create_ride(rider_id, driver_id, pickup_location, dropoff_location, price):
+    conn = sqlite3.connect('ride_share_app.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO rides (rider_id, driver_id, pickup_location, dropoff_location, ride_status, price)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (rider_id, driver_id, pickup_location, dropoff_location, 'pending', price))
+    conn.commit()
+    conn.close()
+
+def get_ride_details():
+    conn = sqlite3.connect('ride_share_app.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT * FROM rides
+    ''')
+    rides = cursor.fetchall()
+    conn.close()
+    return rides
+
+def add_rental(vehicle_type, daily_rate):
+    conn = sqlite3.connect('ride_share_app.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO rentals (vehicle_type, daily_rate)
+        VALUES (?, ?)
+    ''', (vehicle_type, daily_rate))
+    conn.commit()
+    conn.close()
+
+def fetch_rentals():
+    conn = sqlite3.connect('ride_share_app.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT * FROM rentals
+    ''')
+    rentals = cursor.fetchall()
+    conn.close()
+    return rentals
+
+# GUI Application
+class RideShareAppGUI(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Ride Share App")
+        self.geometry("500x600")  # Increased size for additional fields
+        self.create_widgets()
+
+    def create_widgets(self):
+        tk.Label(self, text="Register Driver or Rider").pack(pady=10)
+
+        tk.Label(self, text="Name").pack()
+        self.name_entry = tk.Entry(self)
+        self.name_entry.pack()
+
+        tk.Label(self, text="Email").pack()
+        self.email_entry = tk.Entry(self)
+        self.email_entry.pack()
+
+        tk.Label(self, text="Phone Number").pack()
+        self.phone_entry = tk.Entry(self)
+        self.phone_entry.pack()
+
+        tk.Label(self, text="Type (driver/rider)").pack()
+        self.type_entry = tk.Entry(self)
+        self.type_entry.pack()
+
+        tk.Label(self, text="License Number (if driver)").pack()
+        self.license_entry = tk.Entry(self)
+        self.license_entry.pack()
+
+        tk.Label(self, text="Vehicle Type (if driver)").pack()
+        self.vehicle_entry = tk.Entry(self)
+        self.vehicle_entry.pack()
+
+        self.register_button = tk.Button(self, text="Register", command=self.register)
+        self.register_button.pack(pady=10)
+
+        tk.Label(self, text="Request Ride").pack(pady=10)
+
+        tk.Label(self, text="Rider ID").pack()
+        self.rider_id_entry = tk.Entry(self)
+        self.rider_id_entry.pack()
+
+        tk.Label(self, text="Pickup Location").pack()
+        self.pickup_location_entry = tk.Entry(self)
+        self.pickup_location_entry.pack()
+
+        tk.Label(self, text="Dropoff Location").pack()
+        self.dropoff_location_entry = tk.Entry(self)
+        self.dropoff_location_entry.pack()
+
+        tk.Label(self, text="Price").pack()
+        self.price_entry = tk.Entry(self)
+        self.price_entry.pack()
+
+        self.request_ride_button = tk.Button(self, text="Request Ride", command=self.request_ride)
+        self.request_ride_button.pack(pady=10)
+
+        self.view_rides_button = tk.Button(self, text="View Rides", command=self.view_rides)
+        self.view_rides_button.pack(pady=10)
+
+        tk.Label(self, text="Manage Rentals").pack(pady=10)
+
+        tk.Label(self, text="Vehicle Type").pack()
+        self.rental_vehicle_type_entry = tk.Entry(self)
+        self.rental_vehicle_type_entry.pack()
+
+        tk.Label(self, text="Daily Rate").pack()
+        self.rental_daily_rate_entry = tk.Entry(self)
+        self.rental_daily_rate_entry.pack()
+
+        self.add_rental_button = tk.Button(self, text="Add Rental", command=self.add_rental)
+        self.add_rental_button.pack(pady=10)
+
+        self.view_rentals_button = tk.Button(self, text="View Rentals", command=self.view_rentals)
+        self.view_rentals_button.pack(pady=10)
+
+    def register(self):
+        name = self.name_entry.get()
+        email = self.email_entry.get()
+        phone_number = self.phone_entry.get()
+        user_type = self.type_entry.get()
+        license_number = self.license_entry.get() if user_type == 'driver' else None
+        vehicle_type = self.vehicle_entry.get() if user_type == 'driver' else None
+
+        register_user(name, email, phone_number, user_type, license_number, vehicle_type)
+        messagebox.showinfo("Registration", "User registered successfully!")
+
+    def request_ride(self):
+        rider_id = int(self.rider_id_entry.get())
+        pickup_location = self.pickup_location_entry.get()
+        dropoff_location = self.dropoff_location_entry.get()
+        price = float(self.price_entry.get())
+
+        available_drivers = fetch_available_drivers()
+        if available_drivers:
+            driver_id = random.choice(available_drivers)
+            create_ride(rider_id, driver_id, pickup_location, dropoff_location, price)
+            messagebox.showinfo("Ride Request", "Ride requested successfully!")
+        else:
+            messagebox.showinfo("Ride Request", "No drivers available!")
+
+    def view_rides(self):
+        rides = get_ride_details()
+        ride_info = "\n".join([
+            f"Ride ID: {ride[0]} | Rider ID: {ride[1]} | Driver ID: {ride[2]} | Pickup: {ride[3]} | Dropoff: {ride[4]} | Status: {ride[5]} | Price: ${ride[6]:.2f}"
+            for ride in rides
+        ])
+        messagebox.showinfo("Rides", ride_info if ride_info else "No rides found!")
+
+    def add_rental(self):
+        vehicle_type = self.rental_vehicle_type_entry.get()
+        daily_rate = float(self.rental_daily_rate_entry.get())
+        add_rental(vehicle_type, daily_rate)
+        messagebox.showinfo("Rental", "Rental added successfully!")
+
+    def view_rentals(self):
+        rentals = fetch_rentals()
+        rental_info = "\n".join([
+            f"Rental ID: {rental[0]} | Vehicle Type: {rental[1]} | Daily Rate: ${rental[2]:.2f}"
+            for rental in rentals
+        ])
+        messagebox.showinfo("Rentals", rental_info if rental_info else "No rentals found!")
+
+if __name__ == "__main__":
+    app = RideShareAppGUI()
+    app.mainloop()
